@@ -1,0 +1,470 @@
+/* =====================================================================
+   Retro Snake — game logic (vanilla JavaScript)
+
+   Everything lives inside one IIFE so we don't leak anything onto the
+   global `window` object. The code is grouped into clear sections:
+
+     1. CONFIG          — knobs you can safely tweak
+     2. DOM references  — cached elements
+     3. State           — the mutable game state
+     4. Persistence     — best score via localStorage
+     5. Setup           — reset / food placement
+     6. Input           — keyboard, swipe, and on-screen D-pad
+     7. Game logic      — the per-step update (move / eat / collide)
+     8. Rendering       — drawing the board onto the canvas
+     9. Loop            — a fixed-timestep game loop
+    10. Screens         — start / pause / game over transitions
+    11. Init            — wire everything together
+   ===================================================================== */
+
+(function () {
+  'use strict';
+
+  /* ------------------------------------------------------------------ */
+  /* 1. CONFIG — change these to alter look & feel and difficulty        */
+  /* ------------------------------------------------------------------ */
+  const CONFIG = {
+    cols: 20,            // number of cells across
+    rows: 20,            // number of cells down
+    cellSize: 20,        // pixel size of one cell (canvas = cols*cellSize)
+
+    stepMs: 130,         // milliseconds per move at the start (lower = faster)
+    minStepMs: 70,       // the fastest the snake is allowed to get
+    speedUpEvery: 4,     // speed up after eating this many foods (0 = never)
+    speedUpBy: 6,        // milliseconds shaved off each speed-up
+
+    wrap: false,         // true = pass through walls; false = walls are deadly
+
+    colors: {
+      background: '#aebe7e', // keep in sync with --lcd-bg in style.css
+      grid: '#a3b173',       // faint "off pixel" dots
+      snake: '#1e2a16',      // snake body
+      snakeHead: '#0f1a09',  // snake head (slightly darker)
+      food: '#1e2a16'        // food
+    },
+
+    storageKey: 'retroSnakeBestScore'
+  };
+
+  // Direction vectors. Using objects keeps the movement maths readable.
+  const DIRS = {
+    up:    { x: 0,  y: -1 },
+    down:  { x: 0,  y: 1 },
+    left:  { x: -1, y: 0 },
+    right: { x: 1,  y: 0 }
+  };
+
+  // The finite set of states the game can be in.
+  const State = { READY: 'ready', RUNNING: 'running', PAUSED: 'paused', OVER: 'over' };
+
+  /* ------------------------------------------------------------------ */
+  /* 2. DOM references                                                   */
+  /* ------------------------------------------------------------------ */
+  const canvas = document.getElementById('game');
+  const ctx = canvas.getContext('2d');
+
+  const scoreEl = document.getElementById('score');
+  const bestEl = document.getElementById('best-score');
+  const finalScoreEl = document.getElementById('final-score');
+  const finalBestEl = document.getElementById('final-best');
+
+  const startScreen = document.getElementById('start-screen');
+  const pauseScreen = document.getElementById('pause-screen');
+  const gameoverScreen = document.getElementById('gameover-screen');
+
+  const startBtn = document.getElementById('start-btn');
+  const resumeBtn = document.getElementById('resume-btn');
+  const restartBtn = document.getElementById('restart-btn');
+  const pauseBtn = document.getElementById('pause-btn');
+  const dpadButtons = document.querySelectorAll('[data-dir]');
+  const board = document.getElementById('board');
+
+  // Match the canvas's internal resolution to the configured grid so one
+  // grid cell maps to exactly CONFIG.cellSize device-independent pixels.
+  canvas.width = CONFIG.cols * CONFIG.cellSize;
+  canvas.height = CONFIG.rows * CONFIG.cellSize;
+
+  /* ------------------------------------------------------------------ */
+  /* 3. State                                                            */
+  /* ------------------------------------------------------------------ */
+  let snake;          // array of {x, y}; index 0 is the head
+  let direction;      // the currently committed direction vector
+  let inputQueue;     // buffered upcoming directions (prevents reversing bug)
+  let food;           // {x, y}
+  let score;
+  let best;
+  let foodsEaten;
+  let stepMs;         // current move interval (shrinks as you speed up)
+  let state;
+  let lastStepTime;   // timestamp of the previous move
+  let rafId;          // requestAnimationFrame handle
+
+  /* ------------------------------------------------------------------ */
+  /* 4. Persistence — best score                                         */
+  /* ------------------------------------------------------------------ */
+  function loadBest() {
+    // localStorage can throw (private mode, disabled storage), so guard it.
+    try {
+      return parseInt(localStorage.getItem(CONFIG.storageKey), 10) || 0;
+    } catch (err) {
+      return 0;
+    }
+  }
+
+  function saveBest(value) {
+    try {
+      localStorage.setItem(CONFIG.storageKey, String(value));
+    } catch (err) {
+      /* storage unavailable — the score simply won't persist */
+    }
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* 5. Setup                                                            */
+  /* ------------------------------------------------------------------ */
+  function resetGame() {
+    const cx = Math.floor(CONFIG.cols / 2);
+    const cy = Math.floor(CONFIG.rows / 2);
+
+    // Start as a length-3 snake heading right, away from the walls.
+    snake = [
+      { x: cx,     y: cy },
+      { x: cx - 1, y: cy },
+      { x: cx - 2, y: cy }
+    ];
+
+    direction = DIRS.right;
+    inputQueue = [];
+    score = 0;
+    foodsEaten = 0;
+    stepMs = CONFIG.stepMs;
+
+    placeFood();
+    updateScoreUI();
+  }
+
+  // Drop food on a random cell that the snake doesn't occupy.
+  function placeFood() {
+    const free = [];
+    for (let y = 0; y < CONFIG.rows; y++) {
+      for (let x = 0; x < CONFIG.cols; x++) {
+        if (!isOnSnake(x, y)) free.push({ x: x, y: y });
+      }
+    }
+    // No free cells means the board is full — the player has effectively won.
+    if (free.length === 0) return;
+    food = free[Math.floor(Math.random() * free.length)];
+  }
+
+  function isOnSnake(x, y) {
+    return snake.some(function (seg) { return seg.x === x && seg.y === y; });
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* 6. Input                                                            */
+  /* ------------------------------------------------------------------ */
+
+  // Queue a direction change, rejecting no-ops and direct reversals.
+  // We compare against the LAST queued direction (or the current one if the
+  // queue is empty) so that pressing e.g. Up then Left within a single step
+  // can't fold the snake back on itself.
+  function queueDirection(name) {
+    if (state !== State.RUNNING) return;
+    const next = DIRS[name];
+    if (!next) return;
+
+    const ref = inputQueue.length ? inputQueue[inputQueue.length - 1] : direction;
+    const isSame = next.x === ref.x && next.y === ref.y;
+    const isReverse = next.x === -ref.x && next.y === -ref.y;
+    if (isSame || isReverse) return;
+
+    // Buffer at most two turns; more than that just feels laggy.
+    if (inputQueue.length < 2) inputQueue.push(next);
+  }
+
+  // Map both arrow keys and WASD to directions.
+  const KEY_MAP = {
+    ArrowUp: 'up', KeyW: 'up',
+    ArrowDown: 'down', KeyS: 'down',
+    ArrowLeft: 'left', KeyA: 'left',
+    ArrowRight: 'right', KeyD: 'right'
+  };
+
+  function onKeyDown(e) {
+    // Pause / resume with Space or P.
+    if (e.code === 'Space' || e.code === 'KeyP') {
+      e.preventDefault();
+      togglePause();
+      return;
+    }
+
+    // Enter starts the game from the start or game-over screen.
+    if (e.code === 'Enter') {
+      if (state === State.READY || state === State.OVER) {
+        e.preventDefault();
+        startGame();
+      }
+      return;
+    }
+
+    const dir = KEY_MAP[e.code];
+    if (dir) {
+      e.preventDefault(); // stop arrow keys from scrolling the page
+      queueDirection(dir);
+    }
+  }
+
+  // --- Touch swipe handling on the board ---
+  let touchStart = null;
+  const SWIPE_THRESHOLD = 24; // minimum px travel to register as a swipe
+
+  function onTouchStart(e) {
+    const t = e.changedTouches && e.changedTouches[0];
+    if (t) touchStart = { x: t.clientX, y: t.clientY };
+  }
+
+  function onTouchEnd(e) {
+    const t = e.changedTouches && e.changedTouches[0];
+    if (!touchStart || !t) return;
+
+    const dx = t.clientX - touchStart.x;
+    const dy = t.clientY - touchStart.y;
+
+    if (Math.max(Math.abs(dx), Math.abs(dy)) >= SWIPE_THRESHOLD) {
+      if (Math.abs(dx) > Math.abs(dy)) {
+        queueDirection(dx > 0 ? 'right' : 'left');
+      } else {
+        queueDirection(dy > 0 ? 'down' : 'up');
+      }
+    }
+    touchStart = null;
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* 7. Game logic — advance the simulation by one step                  */
+  /* ------------------------------------------------------------------ */
+  function step() {
+    // Commit one buffered turn this tick.
+    if (inputQueue.length) direction = inputQueue.shift();
+
+    const head = snake[0];
+    let nx = head.x + direction.x;
+    let ny = head.y + direction.y;
+
+    if (CONFIG.wrap) {
+      // Wrap around the edges.
+      nx = (nx + CONFIG.cols) % CONFIG.cols;
+      ny = (ny + CONFIG.rows) % CONFIG.rows;
+    } else if (nx < 0 || nx >= CONFIG.cols || ny < 0 || ny >= CONFIG.rows) {
+      // Hit a wall.
+      gameOver();
+      return;
+    }
+
+    const willEat = food && nx === food.x && ny === food.y;
+
+    // Self-collision: ignore the current tail cell because it will move out
+    // of the way this tick — unless we're growing, in which case it stays.
+    const body = willEat ? snake : snake.slice(0, snake.length - 1);
+    if (body.some(function (seg) { return seg.x === nx && seg.y === ny; })) {
+      gameOver();
+      return;
+    }
+
+    // Grow by adding the new head.
+    snake.unshift({ x: nx, y: ny });
+
+    if (willEat) {
+      score += 1;
+      foodsEaten += 1;
+
+      // Gradually ramp up the speed for a rising difficulty curve.
+      if (CONFIG.speedUpEvery > 0 && foodsEaten % CONFIG.speedUpEvery === 0) {
+        stepMs = Math.max(CONFIG.minStepMs, stepMs - CONFIG.speedUpBy);
+      }
+
+      placeFood();
+      updateScoreUI();
+    } else {
+      // Not eating: drop the tail so the snake appears to move.
+      snake.pop();
+    }
+  }
+
+  function updateScoreUI() {
+    scoreEl.textContent = score;
+    // Show the live best so it ticks upward the moment you beat your record.
+    bestEl.textContent = Math.max(best, score);
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* 8. Rendering                                                        */
+  /* ------------------------------------------------------------------ */
+  function render() {
+    // Background wash.
+    ctx.fillStyle = CONFIG.colors.background;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // Faint dot grid to sell the LCD look.
+    drawGrid();
+
+    // Food.
+    if (food) drawFood();
+
+    // Snake — draw tail first so the head sits on top.
+    for (let i = snake.length - 1; i >= 0; i--) {
+      ctx.fillStyle = (i === 0) ? CONFIG.colors.snakeHead : CONFIG.colors.snake;
+      drawCell(snake[i].x, snake[i].y);
+    }
+  }
+
+  // A cell drawn with a small inset so segments read as chunky pixels.
+  function drawCell(x, y) {
+    const s = CONFIG.cellSize;
+    const pad = Math.max(1, Math.floor(s * 0.12));
+    ctx.fillRect(x * s + pad, y * s + pad, s - pad * 2, s - pad * 2);
+  }
+
+  function drawGrid() {
+    const s = CONFIG.cellSize;
+    const dot = Math.max(1, Math.floor(s * 0.08));
+    const offset = (s - dot) / 2;
+    ctx.fillStyle = CONFIG.colors.grid;
+    for (let y = 0; y < CONFIG.rows; y++) {
+      for (let x = 0; x < CONFIG.cols; x++) {
+        ctx.fillRect(x * s + offset, y * s + offset, dot, dot);
+      }
+    }
+  }
+
+  // Food is a little diamond so it reads differently from the square snake.
+  function drawFood() {
+    const s = CONFIG.cellSize;
+    const cx = food.x * s + s / 2;
+    const cy = food.y * s + s / 2;
+    const r = s * 0.3;
+    ctx.fillStyle = CONFIG.colors.food;
+    ctx.beginPath();
+    ctx.moveTo(cx, cy - r);
+    ctx.lineTo(cx + r, cy);
+    ctx.lineTo(cx, cy + r);
+    ctx.lineTo(cx - r, cy);
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* 9. Game loop — fixed timestep driven by requestAnimationFrame       */
+  /* ------------------------------------------------------------------ */
+  function loop(now) {
+    // Schedule the next frame up front so an exception mid-step doesn't
+    // silently stop the loop.
+    rafId = requestAnimationFrame(loop);
+
+    const elapsed = now - lastStepTime;
+    if (elapsed >= stepMs) {
+      // Snap forward by whole steps so timing stays stable after a slow frame.
+      lastStepTime = now - (elapsed % stepMs);
+      step();
+    }
+
+    render();
+  }
+
+  function startLoop() {
+    lastStepTime = performance.now();
+    cancelAnimationFrame(rafId);
+    rafId = requestAnimationFrame(loop);
+  }
+
+  function stopLoop() {
+    cancelAnimationFrame(rafId);
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* 10. Screens / transitions                                           */
+  /* ------------------------------------------------------------------ */
+  function show(el) { el.classList.remove('hidden'); }
+  function hide(el) { el.classList.add('hidden'); }
+
+  function startGame() {
+    resetGame();
+    state = State.RUNNING;
+    hide(startScreen);
+    hide(gameoverScreen);
+    hide(pauseScreen);
+    startLoop();
+  }
+
+  function togglePause() {
+    if (state === State.RUNNING) {
+      state = State.PAUSED;
+      stopLoop();
+      show(pauseScreen);
+    } else if (state === State.PAUSED) {
+      state = State.RUNNING;
+      hide(pauseScreen);
+      startLoop();
+    }
+  }
+
+  function gameOver() {
+    state = State.OVER;
+    stopLoop();
+
+    if (score > best) {
+      best = score;
+      saveBest(best);
+    }
+
+    finalScoreEl.textContent = score;
+    finalBestEl.textContent = best;
+    updateScoreUI();
+    show(gameoverScreen);
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* 11. Init — wire up events and draw the first frame                  */
+  /* ------------------------------------------------------------------ */
+  function init() {
+    best = loadBest();
+    resetGame();           // populate the board so it isn't blank behind...
+    state = State.READY;   // ...the start overlay
+    render();
+
+    // Keyboard.
+    document.addEventListener('keydown', onKeyDown);
+
+    // Buttons.
+    startBtn.addEventListener('click', startGame);
+    restartBtn.addEventListener('click', startGame);
+    resumeBtn.addEventListener('click', togglePause);
+
+    // pointerdown feels instant on touch devices; preventDefault stops the
+    // synthetic mouse events and focus jumps that would otherwise follow.
+    pauseBtn.addEventListener('pointerdown', function (e) {
+      e.preventDefault();
+      togglePause();
+    });
+
+    dpadButtons.forEach(function (btn) {
+      btn.addEventListener('pointerdown', function (e) {
+        e.preventDefault();
+        queueDirection(btn.dataset.dir);
+      });
+    });
+
+    // Touch swipes on the board. touchmove is non-passive so we can block
+    // the page from scrolling while a swipe is in progress.
+    board.addEventListener('touchstart', onTouchStart, { passive: true });
+    board.addEventListener('touchmove', function (e) { e.preventDefault(); }, { passive: false });
+    board.addEventListener('touchend', onTouchEnd, { passive: true });
+
+    // Auto-pause if the tab is hidden so the snake doesn't run off-screen.
+    document.addEventListener('visibilitychange', function () {
+      if (document.hidden && state === State.RUNNING) togglePause();
+    });
+  }
+
+  init();
+})();

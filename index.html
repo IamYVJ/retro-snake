@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <!-- Lock the viewport so mobile swipe/tap controls behave predictably -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#14161b" />
+  <meta name="description" content="A retro monochrome Snake game inspired by classic keypad phones. Vanilla HTML, CSS, and JavaScript." />
+  <title>Retro Snake</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <main class="device">
+    <!-- The phone shell that frames the screen and on-screen controls -->
+    <div class="phone">
+      <div class="phone__brand">RETRO&middot;CELL</div>
+
+      <!-- The "LCD" screen: heads-up display + game board -->
+      <div class="screen">
+        <header class="hud">
+          <div class="hud__item">
+            <span class="hud__label">SCORE</span>
+            <span class="hud__value" id="score">0</span>
+          </div>
+          <div class="hud__title">SNAKE</div>
+          <div class="hud__item hud__item--right">
+            <span class="hud__label">BEST</span>
+            <span class="hud__value" id="best-score">0</span>
+          </div>
+        </header>
+
+        <!-- The game board holds the canvas plus the start/pause/game-over overlays -->
+        <div class="board" id="board">
+          <canvas id="game" width="400" height="400" role="img" aria-label="Snake game board"></canvas>
+
+          <!-- Start screen -->
+          <div class="overlay" id="start-screen">
+            <h1 class="overlay__title">SNAKE</h1>
+            <p class="overlay__text">Eat the dots.<br />Don't bite yourself.</p>
+            <button class="btn" id="start-btn" type="button">Start Game</button>
+            <p class="overlay__hint">Arrows / WASD &middot; Swipe &middot; Space&nbsp;=&nbsp;pause</p>
+          </div>
+
+          <!-- Pause screen -->
+          <div class="overlay overlay--mini hidden" id="pause-screen">
+            <h2 class="overlay__title">PAUSED</h2>
+            <button class="btn" id="resume-btn" type="button">Resume</button>
+          </div>
+
+          <!-- Game over screen -->
+          <div class="overlay hidden" id="gameover-screen">
+            <h2 class="overlay__title">GAME OVER</h2>
+            <p class="overlay__text">Score: <span id="final-score">0</span></p>
+            <p class="overlay__text">Best: <span id="final-best">0</span></p>
+            <button class="btn" id="restart-btn" type="button">Play Again</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- On-screen controls: a classic D-pad with a pause key in the middle -->
+      <div class="controls">
+        <div class="dpad" aria-label="Direction controls">
+          <button class="dpad__btn dpad__btn--up" data-dir="up" type="button" aria-label="Move up">&#9650;</button>
+          <button class="dpad__btn dpad__btn--left" data-dir="left" type="button" aria-label="Move left">&#9664;</button>
+          <button class="dpad__btn dpad__btn--center" id="pause-btn" type="button" aria-label="Pause or resume">&#10073;&#10073;</button>
+          <button class="dpad__btn dpad__btn--right" data-dir="right" type="button" aria-label="Move right">&#9654;</button>
+          <button class="dpad__btn dpad__btn--down" data-dir="down" type="button" aria-label="Move down">&#9660;</button>
+        </div>
+      </div>
+    </div>
+
+    <footer class="credits">Arrow keys / WASD &middot; swipe &middot; or use the pad. Space pauses.</footer>
+  </main>
+
+  <script src="script.js"></script>
+</body>
+</html>

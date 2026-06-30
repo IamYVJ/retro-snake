@@ -1,0 +1,301 @@
+/* =====================================================================
+   Retro Snake — styles
+   A nostalgic monochrome "LCD phone" look built only with CSS.
+   Tweak the custom properties in :root to re-theme the whole game.
+   ===================================================================== */
+
+:root {
+  /* --- LCD palette ---
+     Keep --lcd-bg in sync with CONFIG.colors.background in script.js so the
+     canvas background matches the framing around it. */
+  --lcd-bg: #aebe7e;        /* screen background (a "pixel off") */
+  --lcd-ink: #1e2a16;       /* dark pixels: text, snake, food */
+  --lcd-ink-soft: #34431f;  /* softer ink for button shadows */
+
+  /* --- Phone shell --- */
+  --shell: #23262d;
+  --shell-dark: #14161b;
+  --shell-edge: #3a3f49;
+  --btn-face: #2c313a;
+  --btn-edge: #474e5b;
+  --btn-text: #cfd6e2;
+
+  /* --- Page --- */
+  --page-bg: #0e0f12;
+  --page-text: #aeb6a0;
+
+  --radius-phone: 30px;
+  --radius-screen: 12px;
+
+  /* Monospace stack gives a pixel/terminal feel with zero external assets */
+  --font: ui-monospace, "Courier New", Courier, monospace;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 14px;
+  background: radial-gradient(circle at 50% -10%, #1c1f27 0%, var(--page-bg) 70%);
+  color: var(--page-text);
+  font-family: var(--font);
+  /* A retro game shouldn't let you accidentally select text or highlight on tap */
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* ------------------------------------------------------------------ */
+/* Phone shell                                                         */
+/* ------------------------------------------------------------------ */
+.phone {
+  width: min(92vw, 360px);
+  padding: 18px 18px 22px;
+  background: linear-gradient(180deg, var(--shell-edge) 0%, var(--shell) 9%, var(--shell-dark) 100%);
+  border: 1px solid #000;
+  border-radius: var(--radius-phone);
+  box-shadow:
+    0 2px 0 rgba(255, 255, 255, 0.06) inset,
+    0 -12px 30px rgba(0, 0, 0, 0.45) inset,
+    0 24px 50px rgba(0, 0, 0, 0.55);
+}
+
+.phone__brand {
+  margin-bottom: 12px;
+  text-align: center;
+  font-size: 11px;
+  letter-spacing: 4px;
+  text-transform: uppercase;
+  color: #6f7686;
+}
+
+/* ------------------------------------------------------------------ */
+/* Screen                                                              */
+/* ------------------------------------------------------------------ */
+.screen {
+  padding: 12px;
+  background: #2a2d25;
+  border: 2px solid #0c0d0a;
+  border-radius: var(--radius-screen);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5) inset;
+}
+
+/* Heads-up display: score / title / best score */
+.hud {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 7px 10px;
+  background: var(--lcd-bg);
+  color: var(--lcd-ink);
+  border: 2px solid var(--lcd-ink);
+  border-bottom: none;
+  border-radius: 5px 5px 0 0;
+}
+
+.hud__item {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.1;
+}
+
+.hud__item--right {
+  align-items: flex-end;
+}
+
+.hud__label {
+  font-size: 9px;
+  letter-spacing: 1px;
+  opacity: 0.8;
+}
+
+.hud__value {
+  font-size: 18px;
+  font-weight: bold;
+}
+
+.hud__title {
+  font-size: 14px;
+  font-weight: bold;
+  letter-spacing: 3px;
+}
+
+/* ------------------------------------------------------------------ */
+/* Game board + canvas                                                 */
+/* ------------------------------------------------------------------ */
+.board {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  background: var(--lcd-bg);
+  border: 2px solid var(--lcd-ink);
+  overflow: hidden;
+  touch-action: none; /* we handle swipes ourselves; stop the page scrolling */
+}
+
+#game {
+  display: block;
+  width: 100%;
+  height: 100%;
+  /* Scale the low-res canvas up without blurring the pixels */
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+}
+
+/* ------------------------------------------------------------------ */
+/* Overlays (start / pause / game over)                                */
+/* ------------------------------------------------------------------ */
+.overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 16px;
+  text-align: center;
+  background: var(--lcd-bg);
+  color: var(--lcd-ink);
+}
+
+/* The pause overlay is translucent so you can still see the frozen board */
+.overlay--mini {
+  background: rgba(174, 190, 126, 0.82);
+}
+
+.overlay.hidden {
+  display: none;
+}
+
+.overlay__title {
+  margin: 0;
+  font-size: clamp(26px, 9vw, 32px);
+  font-weight: 800;
+  letter-spacing: 6px;
+}
+
+.overlay__text {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.overlay__hint {
+  margin: 8px 0 0;
+  font-size: 10px;
+  line-height: 1.6;
+  opacity: 0.75;
+}
+
+/* ------------------------------------------------------------------ */
+/* Buttons                                                             */
+/* ------------------------------------------------------------------ */
+.btn {
+  margin-top: 6px;
+  padding: 10px 20px;
+  font-family: var(--font);
+  font-size: 14px;
+  font-weight: bold;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--lcd-bg);
+  background: var(--lcd-ink);
+  border: none;
+  border-radius: 3px;
+  cursor: pointer;
+  box-shadow: 0 4px 0 var(--lcd-ink-soft);
+  transition: transform 0.04s ease, box-shadow 0.04s ease;
+}
+
+.btn:active {
+  transform: translateY(3px);
+  box-shadow: 0 1px 0 var(--lcd-ink-soft);
+}
+
+.btn:focus-visible {
+  outline: 2px dashed var(--lcd-ink-soft);
+  outline-offset: 3px;
+}
+
+/* ------------------------------------------------------------------ */
+/* On-screen D-pad                                                     */
+/* ------------------------------------------------------------------ */
+.controls {
+  margin-top: 14px;
+  display: flex;
+  justify-content: center;
+}
+
+.dpad {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  grid-template-rows: repeat(3, 1fr);
+  gap: 7px;
+  width: min(58vw, 200px);
+  aspect-ratio: 1 / 1;
+}
+
+.dpad__btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font);
+  font-size: 18px;
+  color: var(--btn-text);
+  background: linear-gradient(180deg, var(--btn-edge), var(--btn-face));
+  border: 1px solid #0a0b0e;
+  border-radius: 12px;
+  cursor: pointer;
+  touch-action: manipulation;
+  box-shadow: 0 3px 0 #0a0b0e, 0 1px 0 rgba(255, 255, 255, 0.12) inset;
+  transition: transform 0.04s ease, box-shadow 0.04s ease;
+}
+
+.dpad__btn:active {
+  transform: translateY(2px);
+  box-shadow: 0 1px 0 #0a0b0e;
+}
+
+.dpad__btn:focus-visible {
+  outline: 2px solid var(--btn-edge);
+  outline-offset: 2px;
+}
+
+/* Position each key in the 3x3 grid */
+.dpad__btn--up     { grid-column: 2; grid-row: 1; }
+.dpad__btn--left   { grid-column: 1; grid-row: 2; }
+.dpad__btn--center { grid-column: 2; grid-row: 2; font-size: 12px; letter-spacing: 1px; color: #9aa2af; }
+.dpad__btn--right  { grid-column: 3; grid-row: 2; }
+.dpad__btn--down   { grid-column: 2; grid-row: 3; }
+
+/* ------------------------------------------------------------------ */
+/* Footer credit                                                       */
+/* ------------------------------------------------------------------ */
+.credits {
+  max-width: 360px;
+  text-align: center;
+  font-size: 11px;
+  line-height: 1.5;
+  color: #5b616e;
+}
+
+/* On very short screens, trim the D-pad so everything stays on one view */
+@media (max-height: 740px) {
+  .dpad { width: min(48vw, 168px); }
+  .overlay__title { letter-spacing: 4px; }
+}
