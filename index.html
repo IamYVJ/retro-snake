@@ -37,9 +37,21 @@
           <div class="overlay" id="start-screen">
             <h1 class="overlay__title">SNAKE</h1>
             <p class="overlay__text">Eat the dots.<br />Don't bite yourself.</p>
-            <div class="mode-toggle" role="group" aria-label="Game mode">
-              <button class="mode-toggle__opt" data-mode="classic" type="button" aria-pressed="true">Walls</button>
-              <button class="mode-toggle__opt" data-mode="wrap" type="button" aria-pressed="false">No Walls</button>
+            <div class="options">
+              <div class="option">
+                <span class="option__label">Mode</span>
+                <div class="seg-toggle" role="group" aria-label="Game mode">
+                  <button class="seg-toggle__opt" data-mode="classic" type="button" aria-pressed="true">Walls</button>
+                  <button class="seg-toggle__opt" data-mode="wrap" type="button" aria-pressed="false">No Walls</button>
+                </div>
+              </div>
+              <div class="option">
+                <span class="option__label">Screen</span>
+                <div class="seg-toggle" role="group" aria-label="Screen size">
+                  <button class="seg-toggle__opt" data-layout="phone" type="button" aria-pressed="true">Phone</button>
+                  <button class="seg-toggle__opt" data-layout="wide" type="button" aria-pressed="false">Wide</button>
+                </div>
+              </div>
             </div>
             <button class="btn" id="start-btn" type="button">Start Game</button>
             <p class="overlay__hint">Arrows / WASD &middot; Swipe &middot; Space&nbsp;=&nbsp;pause</p>
@@ -56,9 +68,21 @@
             <h2 class="overlay__title">GAME OVER</h2>
             <p class="overlay__text">Score: <span id="final-score">0</span></p>
             <p class="overlay__text">Best: <span id="final-best">0</span></p>
-            <div class="mode-toggle" role="group" aria-label="Game mode">
-              <button class="mode-toggle__opt" data-mode="classic" type="button" aria-pressed="true">Walls</button>
-              <button class="mode-toggle__opt" data-mode="wrap" type="button" aria-pressed="false">No Walls</button>
+            <div class="options">
+              <div class="option">
+                <span class="option__label">Mode</span>
+                <div class="seg-toggle" role="group" aria-label="Game mode">
+                  <button class="seg-toggle__opt" data-mode="classic" type="button" aria-pressed="true">Walls</button>
+                  <button class="seg-toggle__opt" data-mode="wrap" type="button" aria-pressed="false">No Walls</button>
+                </div>
+              </div>
+              <div class="option">
+                <span class="option__label">Screen</span>
+                <div class="seg-toggle" role="group" aria-label="Screen size">
+                  <button class="seg-toggle__opt" data-layout="phone" type="button" aria-pressed="true">Phone</button>
+                  <button class="seg-toggle__opt" data-layout="wide" type="button" aria-pressed="false">Wide</button>
+                </div>
+              </div>
             </div>
             <button class="btn" id="restart-btn" type="button">Play Again</button>
           </div>

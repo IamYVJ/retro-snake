@@ -24,9 +24,15 @@
   /* 1. CONFIG — change these to alter look & feel and difficulty        */
   /* ------------------------------------------------------------------ */
   const CONFIG = {
-    cols: 20,            // number of cells across
-    rows: 20,            // number of cells down
-    cellSize: 20,        // pixel size of one cell (canvas = cols*cellSize)
+    // Board layouts, switchable at runtime via the "Screen" toggle. "phone" is
+    // the classic square LCD; "wide" is a broader field for laptop/desktop.
+    // Each cell renders at cellSize px in the canvas (which is then scaled to
+    // fit by CSS), so cols*cellSize x rows*cellSize is the canvas resolution.
+    layouts: {
+      phone: { cols: 20, rows: 20, cellSize: 20 }, // 1:1 square
+      wide:  { cols: 34, rows: 20, cellSize: 20 }  // ~17:10 widescreen
+    },
+    defaultLayout: 'phone', // used only when the screen can't be auto-detected
 
     stepMs: 130,         // milliseconds per move at the start (lower = faster)
     minStepMs: 70,       // the fastest the snake is allowed to get
@@ -44,8 +50,9 @@
       food: '#1e2a16'        // food
     },
 
-    storageKey: 'retroSnakeBestScore', // best score (Classic); "No Walls" appends a suffix
-    storageKeyMode: 'retroSnakeMode'   // remembers the last-picked mode
+    storageKey: 'retroSnakeBestScore', // best-score prefix (suffixed per layout + mode)
+    storageKeyMode: 'retroSnakeMode',  // remembers the last-picked mode
+    storageKeyLayout: 'retroSnakeLayout' // remembers the last-picked screen layout
   };
 
   // Direction vectors. Using objects keeps the movement maths readable.
@@ -80,16 +87,15 @@
   const pauseBtn = document.getElementById('pause-btn');
   const dpadButtons = document.querySelectorAll('[data-dir]');
   const modeButtons = document.querySelectorAll('[data-mode]');
+  const layoutButtons = document.querySelectorAll('[data-layout]');
   const board = document.getElementById('board');
-
-  // Match the canvas's internal resolution to the configured grid so one
-  // grid cell maps to exactly CONFIG.cellSize device-independent pixels.
-  canvas.width = CONFIG.cols * CONFIG.cellSize;
-  canvas.height = CONFIG.rows * CONFIG.cellSize;
 
   /* ------------------------------------------------------------------ */
   /* 3. State                                                            */
   /* ------------------------------------------------------------------ */
+  // Current grid dimensions — set by applyLayout() from CONFIG.layouts.
+  let cols, rows, cellSize;
+  let layout;         // 'phone' (square) or 'wide' (widescreen)
   let snake;          // array of {x, y}; index 0 is the head
   let direction;      // the currently committed direction vector
   let inputQueue;     // buffered upcoming directions (prevents reversing bug)
@@ -105,13 +111,14 @@
   let wrap;           // convenience flag: true when mode === 'wrap'
 
   /* ------------------------------------------------------------------ */
-  /* 4. Persistence — best score (per mode) and the chosen mode          */
+  /* 4. Persistence — best score, chosen mode, chosen layout             */
   /* ------------------------------------------------------------------ */
 
-  // Each mode keeps its own high score, so "No Walls" runs (which tend to
-  // score higher) don't overwrite the Classic record.
+  // Each layout + mode combination is really a different game, so each keeps
+  // its own high score (e.g. a roomy "wide / No Walls" run can't overwrite the
+  // tighter "phone / Walls" record).
   function bestKey() {
-    return mode === 'wrap' ? CONFIG.storageKey + '_nowalls' : CONFIG.storageKey;
+    return CONFIG.storageKey + '_' + layout + '_' + mode;
   }
 
   function loadBest() {
@@ -162,12 +169,62 @@
     });
   }
 
+  // Pick the starting layout: a remembered choice wins; otherwise default to
+  // "wide" on roomy landscape screens (laptops/desktops) and "phone" elsewhere.
+  function loadLayout() {
+    try {
+      const saved = localStorage.getItem(CONFIG.storageKeyLayout);
+      if (saved && CONFIG.layouts[saved]) return saved;
+    } catch (err) {
+      /* fall through to auto-detection */
+    }
+    const roomy = window.matchMedia && window.matchMedia('(min-width: 820px)').matches;
+    return roomy ? 'wide' : CONFIG.defaultLayout;
+  }
+
+  // Resize the canvas + board frame to match the active layout's grid.
+  function applyLayout() {
+    const L = CONFIG.layouts[layout] || CONFIG.layouts[CONFIG.defaultLayout];
+    cols = L.cols;
+    rows = L.rows;
+    cellSize = L.cellSize;
+    canvas.width = cols * cellSize;
+    canvas.height = rows * cellSize;
+    board.style.aspectRatio = cols + ' / ' + rows;
+    document.body.classList.toggle('layout-wide', layout === 'wide');
+  }
+
+  // Switch layouts: this changes the board size, so it restarts the board.
+  // Only reachable from the start / game-over overlays, so resetting is safe.
+  function setLayout(next) {
+    layout = CONFIG.layouts[next] ? next : CONFIG.defaultLayout;
+    try {
+      localStorage.setItem(CONFIG.storageKeyLayout, layout);
+    } catch (err) {
+      /* storage unavailable — the choice just won't persist */
+    }
+    applyLayout();
+    best = loadBest();   // best is tracked per layout + mode
+    resetGame();
+    render();
+    updateLayoutUI();
+    updateScoreUI();
+  }
+
+  function updateLayoutUI() {
+    layoutButtons.forEach(function (btn) {
+      const active = btn.dataset.layout === layout;
+      btn.classList.toggle('is-active', active);
+      btn.setAttribute('aria-pressed', active ? 'true' : 'false');
+    });
+  }
+
   /* ------------------------------------------------------------------ */
   /* 5. Setup                                                            */
   /* ------------------------------------------------------------------ */
   function resetGame() {
-    const cx = Math.floor(CONFIG.cols / 2);
-    const cy = Math.floor(CONFIG.rows / 2);
+    const cx = Math.floor(cols / 2);
+    const cy = Math.floor(rows / 2);
 
     // Start as a length-3 snake heading right, away from the walls.
     snake = [
@@ -189,8 +246,8 @@
   // Drop food on a random cell that the snake doesn't occupy.
   function placeFood() {
     const free = [];
-    for (let y = 0; y < CONFIG.rows; y++) {
-      for (let x = 0; x < CONFIG.cols; x++) {
+    for (let y = 0; y < rows; y++) {
+      for (let x = 0; x < cols; x++) {
         if (!isOnSnake(x, y)) free.push({ x: x, y: y });
       }
     }
@@ -296,9 +353,9 @@
 
     if (wrap) {
       // "No Walls" mode: slide off one edge and reappear on the opposite one.
-      nx = (nx + CONFIG.cols) % CONFIG.cols;
-      ny = (ny + CONFIG.rows) % CONFIG.rows;
-    } else if (nx < 0 || nx >= CONFIG.cols || ny < 0 || ny >= CONFIG.rows) {
+      nx = (nx + cols) % cols;
+      ny = (ny + rows) % rows;
+    } else if (nx < 0 || nx >= cols || ny < 0 || ny >= rows) {
       // Hit a wall.
       gameOver();
       return;
@@ -365,18 +422,18 @@
 
   // A cell drawn with a small inset so segments read as chunky pixels.
   function drawCell(x, y) {
-    const s = CONFIG.cellSize;
+    const s = cellSize;
     const pad = Math.max(1, Math.floor(s * 0.12));
     ctx.fillRect(x * s + pad, y * s + pad, s - pad * 2, s - pad * 2);
   }
 
   function drawGrid() {
-    const s = CONFIG.cellSize;
+    const s = cellSize;
     const dot = Math.max(1, Math.floor(s * 0.08));
     const offset = (s - dot) / 2;
     ctx.fillStyle = CONFIG.colors.grid;
-    for (let y = 0; y < CONFIG.rows; y++) {
-      for (let x = 0; x < CONFIG.cols; x++) {
+    for (let y = 0; y < rows; y++) {
+      for (let x = 0; x < cols; x++) {
         ctx.fillRect(x * s + offset, y * s + offset, dot, dot);
       }
     }
@@ -384,7 +441,7 @@
 
   // Food is a little diamond so it reads differently from the square snake.
   function drawFood() {
-    const s = CONFIG.cellSize;
+    const s = cellSize;
     const cx = food.x * s + s / 2;
     const cy = food.y * s + s / 2;
     const r = s * 0.3;
@@ -472,6 +529,9 @@
   /* 11. Init — wire up events and draw the first frame                  */
   /* ------------------------------------------------------------------ */
   function init() {
+    layout = loadLayout(); // restore (or auto-pick) the screen layout first...
+    applyLayout();         // ...so the canvas is sized before anything is drawn
+    updateLayoutUI();
     setMode(loadMode());   // restore the last-played mode (sets `best` too)
     resetGame();           // populate the board so it isn't blank behind...
     state = State.READY;   // ...the start overlay
@@ -503,6 +563,13 @@
     modeButtons.forEach(function (btn) {
       btn.addEventListener('click', function () {
         setMode(btn.dataset.mode);
+      });
+    });
+
+    // Screen-layout toggle on the start / game-over screens.
+    layoutButtons.forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        setLayout(btn.dataset.layout);
       });
     });
 

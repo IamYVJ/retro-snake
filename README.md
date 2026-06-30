@@ -16,13 +16,20 @@ frameworks, no build step, no dependencies, and no external assets. Just open
 - Two **game modes**, switchable on the start / game-over screen:
   - **Walls** — hitting an edge ends the run (the classic rules).
   - **No Walls** — slide off one edge and reappear on the opposite side.
+- Two **screen layouts** for the play field:
+  - **Phone** — the classic square LCD screen.
+  - **Wide** — a broader widescreen field that suits laptop/desktop monitors.
+  - Defaults to **Wide** on roomy screens and **Phone** on small ones, and
+    remembers whichever you pick.
 - Keyboard controls: **arrow keys** and **WASD**.
 - Mobile controls: **swipe** anywhere on the board, or use the **on-screen D-pad**.
+  Touch-friendly, with safe-area insets for notched phones and a compact
+  side-by-side layout when a phone is held in landscape.
 - Smart input buffering that **prevents accidental reverse-into-yourself** moves.
 - **Pause / resume** (Space, `P`, or the centre pad button) — also auto-pauses
   when you switch tabs.
-- **Score** and a **per-mode best score**, saved in `localStorage` (each mode
-  keeps its own record, and your last-played mode is remembered).
+- **Score** and a **best score** saved in `localStorage` — tracked separately
+  per screen layout **and** mode, and your last picks are remembered.
 - **Start** screen and **Game Over** screen with a one-tap restart.
 - Gradually increasing speed for a rising difficulty curve.
 - Fully **responsive**, centred layout that works on desktop and mobile.
@@ -37,6 +44,7 @@ frameworks, no build step, no dependencies, and no external assets. Just open
 | Pause / resume    | Space or `P`           | Centre pad button (`II`)        |
 | Start / play again| Enter, or the button   | Tap the button                  |
 | Switch mode       | Walls / No Walls toggle on the start & game-over screens | Tap the toggle |
+| Switch screen     | Phone / Wide toggle on the start & game-over screens | Tap the toggle |
 
 ## Customising the game
 
@@ -45,16 +53,17 @@ All the tunable settings live in the `CONFIG` object at the top of
 
 | Setting        | What it does                                            |
 | -------------- | ------------------------------------------------------- |
-| `cols`, `rows` | Grid dimensions (number of cells).                      |
-| `cellSize`     | Pixel size of each cell (sets the canvas resolution).   |
+| `layouts`      | Grid dimensions (`cols`, `rows`, `cellSize`) for each screen layout (`phone`, `wide`). |
+| `defaultLayout`| Fallback layout when the screen size can't be detected. |
 | `stepMs`       | Starting move interval in ms (lower = faster).          |
 | `minStepMs`    | Speed cap — the fastest the snake can get.              |
 | `speedUpEvery` | Speed up after eating this many foods (`0` disables it).|
 | `speedUpBy`    | Milliseconds removed from the interval per speed-up.    |
 | `wrap`         | Default mode: `true` starts in "No Walls", `false` in "Walls" (players can switch at runtime). |
 | `colors`       | Board, snake, and food colours.                         |
-| `storageKey`   | `localStorage` key for the best score ("No Walls" appends a suffix). |
+| `storageKey`   | `localStorage` best-score prefix (a `_layout_mode` suffix is appended per combination). |
 | `storageKeyMode` | `localStorage` key that remembers the last-played mode. |
+| `storageKeyLayout` | `localStorage` key that remembers the last-played screen layout. |
 
 The colour theme is mirrored in CSS custom properties at the top of
 [`style.css`](style.css) — keep `--lcd-bg` in sync with

@@ -49,7 +49,9 @@ body {
   align-items: center;
   justify-content: center;
   gap: 10px;
-  padding: 14px;
+  /* Respect notches / rounded corners on phones (viewport-fit=cover is set) */
+  padding: max(14px, env(safe-area-inset-top)) max(14px, env(safe-area-inset-right))
+           max(14px, env(safe-area-inset-bottom)) max(14px, env(safe-area-inset-left));
   background: radial-gradient(circle at 50% -10%, #1c1f27 0%, var(--page-bg) 70%);
   color: var(--page-text);
   font-family: var(--font);
@@ -72,6 +74,12 @@ body {
     0 2px 0 rgba(255, 255, 255, 0.06) inset,
     0 -12px 30px rgba(0, 0, 0, 0.45) inset,
     0 24px 50px rgba(0, 0, 0, 0.55);
+}
+
+/* Wide ("widescreen") layout: a broader shell for laptop/desktop screens.
+   The board's aspect-ratio is set from JS to match the wider grid. */
+body.layout-wide .phone {
+  width: min(96vw, 720px);
 }
 
 .phone__brand {
@@ -171,6 +179,9 @@ body {
   text-align: center;
   background: var(--lcd-bg);
   color: var(--lcd-ink);
+  /* If the controls don't fit (e.g. a short, wide board), let them scroll
+     rather than spill out of the screen. */
+  overflow-y: auto;
 }
 
 /* The pause overlay is translucent so you can still see the frozen board */
@@ -233,16 +244,39 @@ body {
 }
 
 /* ------------------------------------------------------------------ */
-/* Mode toggle — a small LCD-style segmented switch (Walls / No Walls) */
+/* Options (Mode + Screen) — labelled LCD-style segmented switches      */
 /* ------------------------------------------------------------------ */
-.mode-toggle {
+.options {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  max-width: 280px;
+  margin: 2px 0;
+}
+
+.option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.option__label {
+  font-size: 10px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  opacity: 0.8;
+}
+
+.seg-toggle {
   display: inline-flex;
   border: 2px solid var(--lcd-ink);
   border-radius: 4px;
   overflow: hidden;
 }
 
-.mode-toggle__opt {
+.seg-toggle__opt {
   padding: 6px 12px;
   font-family: var(--font);
   font-size: 11px;
@@ -256,17 +290,17 @@ body {
 }
 
 /* A divider line between the two options */
-.mode-toggle__opt + .mode-toggle__opt {
+.seg-toggle__opt + .seg-toggle__opt {
   border-left: 2px solid var(--lcd-ink);
 }
 
-/* The selected mode reads as a filled "pressed" segment */
-.mode-toggle__opt.is-active {
+/* The selected option reads as a filled "pressed" segment */
+.seg-toggle__opt.is-active {
   color: var(--lcd-bg);
   background: var(--lcd-ink);
 }
 
-.mode-toggle__opt:focus-visible {
+.seg-toggle__opt:focus-visible {
   outline: 2px dashed var(--lcd-ink-soft);
   outline-offset: 2px;
 }
@@ -337,4 +371,29 @@ body {
 @media (max-height: 740px) {
   .dpad { width: min(48vw, 168px); }
   .overlay__title { letter-spacing: 4px; }
+}
+
+/* Landscape on short screens (a phone held sideways): place the D-pad beside
+   the screen and size the board by height so the whole device fits without
+   the page scrolling. */
+@media (orientation: landscape) and (max-height: 560px) {
+  .phone {
+    display: grid;
+    grid-template-areas:
+      "brand  brand"
+      "screen controls";
+    grid-template-columns: auto auto;
+    align-items: center;
+    column-gap: 16px;
+    width: auto;
+    max-width: 98vw;
+    padding: 10px 14px 12px;
+  }
+  .phone__brand { grid-area: brand; margin-bottom: 6px; }
+  .screen { grid-area: screen; width: min(76vh, 60vw); }
+  body.layout-wide .phone { width: auto; }
+  body.layout-wide .screen { width: min(130vh, 72vw); }
+  .controls { grid-area: controls; margin-top: 0; }
+  .dpad { width: min(32vh, 140px); }
+  .credits { display: none; } /* reclaim vertical space when it's scarce */
 }
