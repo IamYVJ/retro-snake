@@ -63,8 +63,9 @@
     right: { x: 1,  y: 0 }
   };
 
-  // The finite set of states the game can be in.
-  const State = { READY: 'ready', RUNNING: 'running', PAUSED: 'paused', OVER: 'over' };
+  // The finite set of states the game can be in. DYING is the brief window
+  // while the death animation plays, before the Game Over overlay appears.
+  const State = { READY: 'ready', RUNNING: 'running', PAUSED: 'paused', DYING: 'dying', OVER: 'over' };
 
   /* ------------------------------------------------------------------ */
   /* 2. DOM references                                                   */
@@ -402,7 +403,11 @@
   /* ------------------------------------------------------------------ */
   /* 8. Rendering                                                        */
   /* ------------------------------------------------------------------ */
-  function render() {
+  // Draws the board for a given list of snake segments (head at index 0).
+  // Defaults to the live snake; the death animation passes a shrinking list.
+  function render(segments) {
+    const segs = segments || snake;
+
     // Background wash.
     ctx.fillStyle = CONFIG.colors.background;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -414,9 +419,9 @@
     if (food) drawFood();
 
     // Snake — draw tail first so the head sits on top.
-    for (let i = snake.length - 1; i >= 0; i--) {
+    for (let i = segs.length - 1; i >= 0; i--) {
       ctx.fillStyle = (i === 0) ? CONFIG.colors.snakeHead : CONFIG.colors.snake;
-      drawCell(snake[i].x, snake[i].y);
+      drawCell(segs[i].x, segs[i].y);
     }
   }
 
@@ -511,7 +516,9 @@
   }
 
   function gameOver() {
-    state = State.OVER;
+    // Stop the normal loop and play a short death animation before revealing
+    // the overlay — snapping straight to "GAME OVER" felt abrupt.
+    state = State.DYING;
     stopLoop();
 
     if (score > best) {
@@ -519,6 +526,57 @@
       saveBest(best);
     }
 
+    board.classList.add('board--hit'); // a quick screen shake on impact (CSS)
+    playDeath(showGameOver);
+  }
+
+  // An LCD-style death sequence: the screen blanks dark on the hit, the snake
+  // blinks a few times, then drains away tail-to-head. Honours the user's
+  // reduced-motion preference by skipping straight to the overlay.
+  function playDeath(done) {
+    const reduce = window.matchMedia &&
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (reduce) { render([]); done(); return; }
+
+    const corpse = snake.slice(); // freeze the snake at the moment of death
+    const total = corpse.length;
+    const start = performance.now();
+
+    const FLASH_MS = 90;       // screen blanks dark on the hit
+    const BLINK_MS = 420;      // then the snake flashes on/off
+    const BLINK_PERIOD = 140;  // one on+off cycle
+    const DRAIN_MS = 460;      // then it retracts into nothing
+    const endMs = FLASH_MS + BLINK_MS + DRAIN_MS;
+
+    function frame(now) {
+      if (state !== State.DYING) return; // a new game began — abandon the animation
+      const t = now - start;
+
+      if (t < FLASH_MS) {
+        ctx.fillStyle = CONFIG.colors.snake; // dark impact flash
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+      } else if (t < FLASH_MS + BLINK_MS) {
+        const on = Math.floor((t - FLASH_MS) / (BLINK_PERIOD / 2)) % 2 === 0;
+        render(on ? corpse : []);
+      } else if (t < endMs) {
+        const p = (t - FLASH_MS - BLINK_MS) / DRAIN_MS;
+        const keep = Math.max(0, Math.ceil(total * (1 - p)));
+        render(corpse.slice(0, keep));
+      } else {
+        render([]);
+        done();
+        return;
+      }
+
+      rafId = requestAnimationFrame(frame);
+    }
+
+    rafId = requestAnimationFrame(frame);
+  }
+
+  function showGameOver() {
+    state = State.OVER;
+    board.classList.remove('board--hit');
     finalScoreEl.textContent = score;
     finalBestEl.textContent = best;
     updateScoreUI();
