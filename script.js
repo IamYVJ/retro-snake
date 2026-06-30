@@ -33,7 +33,8 @@
     speedUpEvery: 4,     // speed up after eating this many foods (0 = never)
     speedUpBy: 6,        // milliseconds shaved off each speed-up
 
-    wrap: false,         // true = pass through walls; false = walls are deadly
+    wrap: false,         // default mode: false = walls are deadly, true = "No Walls"
+                         // (the player can switch this at runtime via the mode toggle)
 
     colors: {
       background: '#aebe7e', // keep in sync with --lcd-bg in style.css
@@ -43,7 +44,8 @@
       food: '#1e2a16'        // food
     },
 
-    storageKey: 'retroSnakeBestScore'
+    storageKey: 'retroSnakeBestScore', // best score (Classic); "No Walls" appends a suffix
+    storageKeyMode: 'retroSnakeMode'   // remembers the last-picked mode
   };
 
   // Direction vectors. Using objects keeps the movement maths readable.
@@ -77,6 +79,7 @@
   const restartBtn = document.getElementById('restart-btn');
   const pauseBtn = document.getElementById('pause-btn');
   const dpadButtons = document.querySelectorAll('[data-dir]');
+  const modeButtons = document.querySelectorAll('[data-mode]');
   const board = document.getElementById('board');
 
   // Match the canvas's internal resolution to the configured grid so one
@@ -98,14 +101,23 @@
   let state;
   let lastStepTime;   // timestamp of the previous move
   let rafId;          // requestAnimationFrame handle
+  let mode;           // 'classic' (deadly walls) or 'wrap' (edge-to-edge)
+  let wrap;           // convenience flag: true when mode === 'wrap'
 
   /* ------------------------------------------------------------------ */
-  /* 4. Persistence — best score                                         */
+  /* 4. Persistence — best score (per mode) and the chosen mode          */
   /* ------------------------------------------------------------------ */
+
+  // Each mode keeps its own high score, so "No Walls" runs (which tend to
+  // score higher) don't overwrite the Classic record.
+  function bestKey() {
+    return mode === 'wrap' ? CONFIG.storageKey + '_nowalls' : CONFIG.storageKey;
+  }
+
   function loadBest() {
     // localStorage can throw (private mode, disabled storage), so guard it.
     try {
-      return parseInt(localStorage.getItem(CONFIG.storageKey), 10) || 0;
+      return parseInt(localStorage.getItem(bestKey()), 10) || 0;
     } catch (err) {
       return 0;
     }
@@ -113,10 +125,41 @@
 
   function saveBest(value) {
     try {
-      localStorage.setItem(CONFIG.storageKey, String(value));
+      localStorage.setItem(bestKey(), String(value));
     } catch (err) {
       /* storage unavailable — the score simply won't persist */
     }
+  }
+
+  function loadMode() {
+    try {
+      return localStorage.getItem(CONFIG.storageKeyMode) === 'wrap' ? 'wrap' : 'classic';
+    } catch (err) {
+      return CONFIG.wrap ? 'wrap' : 'classic';
+    }
+  }
+
+  // Switch modes: update the flag, remember the choice, and reload the best
+  // score for the newly selected mode so the HUD reflects it immediately.
+  function setMode(next) {
+    mode = (next === 'wrap') ? 'wrap' : 'classic';
+    wrap = (mode === 'wrap');
+    try {
+      localStorage.setItem(CONFIG.storageKeyMode, mode);
+    } catch (err) {
+      /* storage unavailable — the choice just won't persist */
+    }
+    best = loadBest();
+    updateModeUI();
+    updateScoreUI();
+  }
+
+  function updateModeUI() {
+    modeButtons.forEach(function (btn) {
+      const active = btn.dataset.mode === mode;
+      btn.classList.toggle('is-active', active);
+      btn.setAttribute('aria-pressed', active ? 'true' : 'false');
+    });
   }
 
   /* ------------------------------------------------------------------ */
@@ -251,8 +294,8 @@
     let nx = head.x + direction.x;
     let ny = head.y + direction.y;
 
-    if (CONFIG.wrap) {
-      // Wrap around the edges.
+    if (wrap) {
+      // "No Walls" mode: slide off one edge and reappear on the opposite one.
       nx = (nx + CONFIG.cols) % CONFIG.cols;
       ny = (ny + CONFIG.rows) % CONFIG.rows;
     } else if (nx < 0 || nx >= CONFIG.cols || ny < 0 || ny >= CONFIG.rows) {
@@ -293,8 +336,10 @@
 
   function updateScoreUI() {
     scoreEl.textContent = score;
-    // Show the live best so it ticks upward the moment you beat your record.
-    bestEl.textContent = Math.max(best, score);
+    // While playing, show the live best so it ticks up the moment you beat your
+    // record. Otherwise show the stored best for the current mode — this keeps
+    // the HUD correct when you switch modes between games.
+    bestEl.textContent = (state === State.RUNNING) ? Math.max(best, score) : best;
   }
 
   /* ------------------------------------------------------------------ */
@@ -427,7 +472,7 @@
   /* 11. Init — wire up events and draw the first frame                  */
   /* ------------------------------------------------------------------ */
   function init() {
-    best = loadBest();
+    setMode(loadMode());   // restore the last-played mode (sets `best` too)
     resetGame();           // populate the board so it isn't blank behind...
     state = State.READY;   // ...the start overlay
     render();
@@ -451,6 +496,13 @@
       btn.addEventListener('pointerdown', function (e) {
         e.preventDefault();
         queueDirection(btn.dataset.dir);
+      });
+    });
+
+    // Mode toggle on the start / game-over screens.
+    modeButtons.forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        setMode(btn.dataset.mode);
       });
     });
 

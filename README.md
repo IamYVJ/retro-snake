@@ -13,12 +13,16 @@ frameworks, no build step, no dependencies, and no external assets. Just open
 ## Features
 
 - Classic grid-based Snake on an HTML `<canvas>`.
+- Two **game modes**, switchable on the start / game-over screen:
+  - **Walls** — hitting an edge ends the run (the classic rules).
+  - **No Walls** — slide off one edge and reappear on the opposite side.
 - Keyboard controls: **arrow keys** and **WASD**.
 - Mobile controls: **swipe** anywhere on the board, or use the **on-screen D-pad**.
 - Smart input buffering that **prevents accidental reverse-into-yourself** moves.
 - **Pause / resume** (Space, `P`, or the centre pad button) — also auto-pauses
   when you switch tabs.
-- **Score** and **best score**, with the best score saved in `localStorage`.
+- **Score** and a **per-mode best score**, saved in `localStorage` (each mode
+  keeps its own record, and your last-played mode is remembered).
 - **Start** screen and **Game Over** screen with a one-tap restart.
 - Gradually increasing speed for a rising difficulty curve.
 - Fully **responsive**, centred layout that works on desktop and mobile.
@@ -32,6 +36,7 @@ frameworks, no build step, no dependencies, and no external assets. Just open
 | Move              | Arrow keys / WASD      | Swipe on the board, or the D-pad |
 | Pause / resume    | Space or `P`           | Centre pad button (`II`)        |
 | Start / play again| Enter, or the button   | Tap the button                  |
+| Switch mode       | Walls / No Walls toggle on the start & game-over screens | Tap the toggle |
 
 ## Customising the game
 
@@ -46,9 +51,10 @@ All the tunable settings live in the `CONFIG` object at the top of
 | `minStepMs`    | Speed cap — the fastest the snake can get.              |
 | `speedUpEvery` | Speed up after eating this many foods (`0` disables it).|
 | `speedUpBy`    | Milliseconds removed from the interval per speed-up.    |
-| `wrap`         | `true` to pass through walls instead of dying.          |
+| `wrap`         | Default mode: `true` starts in "No Walls", `false` in "Walls" (players can switch at runtime). |
 | `colors`       | Board, snake, and food colours.                         |
-| `storageKey`   | `localStorage` key used for the best score.             |
+| `storageKey`   | `localStorage` key for the best score ("No Walls" appends a suffix). |
+| `storageKeyMode` | `localStorage` key that remembers the last-played mode. |
 
 The colour theme is mirrored in CSS custom properties at the top of
 [`style.css`](style.css) — keep `--lcd-bg` in sync with

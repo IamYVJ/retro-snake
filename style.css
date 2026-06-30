@@ -233,6 +233,45 @@ body {
 }
 
 /* ------------------------------------------------------------------ */
+/* Mode toggle — a small LCD-style segmented switch (Walls / No Walls) */
+/* ------------------------------------------------------------------ */
+.mode-toggle {
+  display: inline-flex;
+  border: 2px solid var(--lcd-ink);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.mode-toggle__opt {
+  padding: 6px 12px;
+  font-family: var(--font);
+  font-size: 11px;
+  font-weight: bold;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--lcd-ink);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+}
+
+/* A divider line between the two options */
+.mode-toggle__opt + .mode-toggle__opt {
+  border-left: 2px solid var(--lcd-ink);
+}
+
+/* The selected mode reads as a filled "pressed" segment */
+.mode-toggle__opt.is-active {
+  color: var(--lcd-bg);
+  background: var(--lcd-ink);
+}
+
+.mode-toggle__opt:focus-visible {
+  outline: 2px dashed var(--lcd-ink-soft);
+  outline-offset: 2px;
+}
+
+/* ------------------------------------------------------------------ */
 /* On-screen D-pad                                                     */
 /* ------------------------------------------------------------------ */
 .controls {
