@@ -2,8 +2,12 @@
 
 A polished, retro-styled **Snake** game inspired by the classic monochrome
 keypad-phone games — built with **vanilla HTML, CSS, and JavaScript**. No
-frameworks, no build step, no dependencies, and no external assets. Just open
-`index.html` and play.
+frameworks, no build step, no dependencies, and no external game assets. Just
+open `index.html` and play.
+
+The only third-party service is [GoatCounter](https://www.goatcounter.com): a
+small pageview beacon that also feeds the visitor count under the game. If it's
+blocked, the game plays exactly the same.
 
 > The look is an original homage: a generic green-on-grey "LCD" handheld. It
 > uses no Nokia logos, trademarks, or copyrighted assets.

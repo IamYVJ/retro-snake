@@ -14,7 +14,8 @@
      8. Rendering       — drawing the board onto the canvas
      9. Loop            — a fixed-timestep game loop
     10. Screens         — start / pause / game over transitions
-    11. Init            — wire everything together
+    11. Visitor count   — decorative GoatCounter footnote
+    12. Init            — wire everything together
    ===================================================================== */
 
 (function () {
@@ -584,7 +585,48 @@
   }
 
   /* ------------------------------------------------------------------ */
-  /* 11. Init — wire up events and draw the first frame                  */
+  /* 11. Visitor count — decorative GoatCounter footnote                 */
+  /* ------------------------------------------------------------------ */
+  // Stays hidden on every failure: adblocker, offline, a brand-new path with
+  // no data yet, or the "visitor counts" setting off.
+  function showVisitorCount() {
+    const box = document.querySelector('.visitor-counter');
+    const out = document.getElementById('visitor-count');
+    if (!box || !out) return;
+
+    // Read the endpoint off the beacon tag so the site URL lives in one place.
+    const tag = document.querySelector('script[data-goatcounter]');
+    const endpoint = tag && tag.dataset.goatcounter;
+    if (!endpoint) return;
+
+    // This page's path only. Never /counter/TOTAL.json, which sums every
+    // project. pathname WITHOUT location.search, on purpose: a visit with
+    // ?fbclid=… is recorded under the longer path, but still shown this total.
+    const path = window.location.pathname;
+
+    // A fixed date before this project's first pageview. All-time is the
+    // default, so this doesn't change the count; it gives the response its own
+    // cache key, sidestepping a 404 cached before the first view was recorded.
+    const START = '2026-01-01';
+
+    const base = endpoint.replace(/\/count$/, '');
+    fetch(base + '/counter/' + encodeURIComponent(path) + '.json?start=' + START)
+      .then(function (res) {
+        return res.ok ? res.json() : Promise.reject(new Error('bad status'));
+      })
+      .then(function (data) {
+        // `count` is already a formatted string: render it as-is. GoatCounter
+        // caches this response for ~4h, so a fresh visit won't move it at once.
+        if (data && data.count != null) {
+          out.textContent = String(data.count);
+          box.hidden = false;
+        }
+      })
+      .catch(function () { /* decorative: stay hidden */ });
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* 12. Init — wire up events and draw the first frame                  */
   /* ------------------------------------------------------------------ */
   function init() {
     layout = loadLayout(); // restore (or auto-pick) the screen layout first...
@@ -641,6 +683,14 @@
     document.addEventListener('visibilitychange', function () {
       if (document.hidden && state === State.RUNNING) togglePause();
     });
+
+    // Visitor footnote. This file loads before the GoatCounter beacon tag at
+    // the end of <body>, so wait for the parser or the tag lookup finds nothing.
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', showVisitorCount, { once: true });
+    } else {
+      showVisitorCount();
+    }
   }
 
   init();

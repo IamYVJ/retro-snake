@@ -101,9 +101,22 @@
       </div>
     </div>
 
-    <footer class="credits">Arrow keys / WASD &middot; swipe &middot; or use the pad. Space pauses.</footer>
+    <footer class="credits">
+      Arrow keys / WASD &middot; swipe &middot; or use the pad. Space pauses.
+      <!-- Visitor count: stays hidden until script.js gets a real number -->
+      <p class="visitor-counter" hidden>
+        <span id="visitor-count" class="visitor-count">&mdash;</span> visitors
+      </p>
+    </footer>
   </main>
 
   <script src="script.js"></script>
+
+  <!-- GoatCounter pageview beacon. One site shared across all projects on purpose:
+       counts are per-path, so each project is separated by its own pathname. -->
+  <script
+    data-goatcounter="https://yvj.goatcounter.com/count"
+    async
+    src="//gc.zgo.at/count.js"></script>
 </body>
 </html>
